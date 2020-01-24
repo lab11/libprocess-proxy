@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import sys
 import os
 import socket
@@ -8,7 +8,9 @@ from tornado.httpserver import HTTPServer
 from tornado.netutil import bind_sockets
 from tornado.web import RequestHandler, Application, HTTPError
 from tornado.ioloop import IOLoop
+import ipaddress
 
+import argparse
 class PID(object):  # noqa
   __slots__ = ('ip', 'port', 'id')
 
@@ -99,8 +101,11 @@ def make_socket(ip, port):
 
 class ProxyRequestHandler(RequestHandler):
 
+  def __init__(self, master_ip):
+    self.master = master_ip
+
   @classmethod
-  def detect_process(cls, headers):
+  def detect_from_process(cls, headers):
     """Returns tuple of process, legacy or None, None if not process originating."""
 
     try:
@@ -114,9 +119,13 @@ class ProxyRequestHandler(RequestHandler):
 
     return None, None
 
+  def detect_to_process_id(cls, headers):
+    print(headers)
+    return None, None
+
   def post(self, *args, **kw):
     #detect the process that this is from
-    process, legacy = self.detect_process(self.request.headers)
+    process, legacy = self.detect_from_process(self.request.headers)
     print(process,self.request.remote_ip,self.request.connection.stream.socket.getpeername())
 
     if process is None:
@@ -126,22 +135,23 @@ class ProxyRequestHandler(RequestHandler):
       return
     
     #was this sent from the target server or the outside world?
+    if process.ip == self.master:
+      #This message was from the master we are proxying, we should do the
+      #lookup and forward it back to the outside world
+      print("Received post from master destined for: " + self.detect_to_process_id(self.request.headers))
+    elif ipaddress.ip_address(process.ip).is_private:
+      #This message is from a device behind a NAT, we should replace the
+      #source IP with our own and add it to the map
+      print("Received post from private IP: " + process.ip)
+    else:
+      #not the master but from a public IP, we should be able to just forward it
+      #directly
+      print("Received post from public IP: " + process.ip)
 
-    #if it was sent from the outside world
-      #Note the public IP/PORT pair
-      #Create a unique from PID that identifies the originator of the message
-      #proxy_ip:proxy_port/public_ip
-  
-    #get the public IP/port pair that this was sent from
+  #def send(self, request, destination_ip, destination_port):
+    #connect to ip and port if necessary
+    #stream write request to that IP/port
 
-    print('Delivering %s to %s from %s' % (self.__name, self.process.pid, process))
-    print('Request body length: %s' % len(self.request.body))
-
-    # Handle the message
-    #self.process.handle_message(self.__name, process, self.request.body)
-
-    self.set_status(202)
-    self.finish()
 
 # def send(self, from_pid, to_pid, method, body=None):
 #    """Send a message method from one pid to another with an optional body.
@@ -193,12 +203,18 @@ class ProxyRequestHandler(RequestHandler):
 #    self.__loop.add_callback(self._maybe_connect, to_pid, on_connect)
 
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='Libprocess proxy')
+    parser.add_argument('master', type=str,  help='The IP address being proxied (where are messages from the outside world being forwarded?)')
+    args = parser.parse_args()
+
+
     #Bind to your external socket and port
     ip, port = get_ip_port()
     sock, ip, port = make_socket(ip, port)
 
     #start the tornado server on the SOCKET and port
-    app = Application(handlers=[(r'.*', ProxyRequestHandler)])
+    app = Application(handlers=[(r'.*', ProxyRequestHandler(args.master))])
     server = HTTPServer(app)
     server.add_sockets([sock])
     print("Listening on " + str(ip) + ":" + str(port))
