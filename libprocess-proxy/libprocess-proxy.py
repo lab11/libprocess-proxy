@@ -125,6 +125,7 @@ class ProxyRequestHandler(RequestHandler):
 
   def post(self, *args, **kw):
     #detect the process that this is from
+    print("Received post")
     process, legacy = self.detect_from_process(self.request.headers)
     print(process,self.request.remote_ip,self.request.connection.stream.socket.getpeername())
 
