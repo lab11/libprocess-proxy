@@ -215,7 +215,7 @@ if __name__ == "__main__":
     sock, ip, port = make_socket(ip, port)
 
     #start the tornado server on the SOCKET and port
-    app = Application(handlers=[(r'.*', ProxyRequestHandler(args.master))])
+    app = Application(handlers=[(r'/.*', ProxyRequestHandler(args.master))])
     server = HTTPServer(app)
     server.add_sockets([sock])
     print("Listening on " + str(ip) + ":" + str(port))
