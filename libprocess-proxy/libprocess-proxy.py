@@ -101,8 +101,8 @@ def make_socket(ip, port):
 
 class ProxyRequestHandler(RequestHandler):
 
-  def __init__(self, master_ip):
-    self.master = master_ip
+  #def __init__(self, master_ip):
+  #  self.master = master_ip
 
   @classmethod
   def detect_from_process(cls, headers):
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     sock, ip, port = make_socket(ip, port)
 
     #start the tornado server on the SOCKET and port
-    app = Application(handlers=[(r'/.*', ProxyRequestHandler(args.master))])
+    app = Application(handlers=[(r'.*', ProxyRequestHandler)])
     server = HTTPServer(app)
     server.add_sockets([sock])
     print("Listening on " + str(ip) + ":" + str(port))
